@@ -1,0 +1,19 @@
+{
+  "name": "dsh-tavern-knock-knock",
+  "version": "0.7.0",
+  "description": "Knock Knock · 敲敲门：故事里被推动、该有后续的事（约定、寄出的信、托人办的事、答应的事）自动记账，到时间敲一下门提醒正文，过期再敲一次，然后放手。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "dsh-tavern-plugin"
+      ]
+    }
+  }
+}
