@@ -124,7 +124,13 @@ window.__ModuleLoader__.load({
         const key = st ? [st.turn, st.textVersion, st.busy].join('|') : ''
         if (key !== last) { last = key; if (st && !st.busy) fetchStatus(gameId).catch(() => {}) }
       })
-      watching.set(gameId, cancel)
+      // 第 3 版：宿主侧记完账推一下，面板马上刷新（第一次回调是当前值，跳过）
+      let cancelLedger = null
+      if (typeof ui.current.watchState === 'function') {
+        let first = true
+        try { cancelLedger = ui.current.watchState(gameId, 'ledger', d => { if (first) { first = false; return } if (d) fetchStatus(gameId).catch(() => {}) }) } catch {}
+      }
+      watching.set(gameId, () => { if (typeof cancel === 'function') cancel(); if (typeof cancelLedger === 'function') cancelLedger() })
     }
     function useStatus(gameId) {
       const [s, setS] = React.useState(cache.get(gameId) || null)

@@ -16,7 +16,7 @@ export const name = 'dsh-tavern-knock-knock'
 export const inject = ['tavern', 'llm']  // llm：直连后台模型做轻量提取（不带人物卡背景）
 
 const PLUGIN = 'dsh-tavern-knock-knock'
-const VERSION = '0.7.0'
+const VERSION = '0.7.1'
 const LATEST = Number.MAX_SAFE_INTEGER
 const MODEL_TIMEOUT_MS = 90000
 const TURN_BUDGET_MS = 240000
@@ -298,7 +298,13 @@ export function apply(ctx) {
     l.lastRun = info
     if (info.via) l.runs = [...(prev.runs || []).filter(x => x.turn < turn), { turn, ms: info.ms, via: info.via, applied: info.applied.length, rejected: info.rejected, input: info.usage && info.usage.input, cacheRead: info.usage && info.usage.cacheRead, inChars: info.inChars }].slice(-12)
     await ctx.tavern.saveTurnData({ gameId, turn, textVersion, data: l })
+    notifyPanel(gameId, turn, textVersion)
     return info
+  }
+  /** 第 3 版：台账存好后告诉自己的面板马上刷新（旧版 Tavern 上面板照旧轮询）。 */
+  function notifyPanel(gameId, turn, textVersion) {
+    if (typeof ctx.tavern.publishState !== 'function') return
+    Promise.resolve().then(() => ctx.tavern.publishState({ gameId, name: 'ledger', data: { turn, textVersion: textVersion || null, at: Date.now() } })).catch(() => {})
   }
   const titleOf = (l, id) => { const e = l.entries.find(x => x.id === id) || (l.closed || []).find(x => x.id === id); return e ? e.title : '' }
 
@@ -340,9 +346,18 @@ export function apply(ctx) {
     const before = old && old.turn < t.turn ? old.promise.catch(() => {}) : Promise.resolve()
     const ac = new AbortController()
     const job = { turn: t.turn, version: t.textVersion, ac, at: Date.now() }
-    job.promise = before.then(() => runExtract(gameId, t, ac.signal)).finally(() => { if (jobs.get(gameId) === job) jobs.delete(gameId) })
+    job.promise = before.then(() => followVersion(gameId, t, ac)).then(() => runExtract(gameId, t, ac.signal)).finally(() => { if (jobs.get(gameId) === job) jobs.delete(gameId) })
     jobs.set(gameId, job)
     return job.promise
+  }
+  /** 第 3 版：这一版正文一失效（回退、重新生成、编辑），后台记账的模型请求跟着停。 */
+  async function followVersion(gameId, t, ac) {
+    if (typeof ctx.tavern.versionSignal !== 'function' || ac.signal.aborted) return
+    try {
+      const vs = await ctx.tavern.versionSignal({ gameId, turn: t.turn, textVersion: t.textVersion })
+      if (vs.aborted) ac.abort(vs.reason)
+      else vs.addEventListener('abort', () => ac.abort(vs.reason), { once: true })
+    } catch {}
   }
   /** 等这一局正在进行的后台记账（最多 ms 毫秒）。返回等了多久；没等完返回 null。 */
   async function settleJobs(gameId, ms, signal) {
@@ -366,6 +381,7 @@ export function apply(ctx) {
       const job = jobs.get(gameId)
       if (job && job.turn < turn) { // 上一轮还在后台记账：等它，免得这一轮基于没记完的台账
         const ms = await settleJobs(gameId, WAIT_PREV_MS, signal)
+        if (signal && signal.aborted) return // 本轮正文已失效（第 3 版起结算任务随之中止）：上一轮的记账不受影响，照常跑完
         if (ms == null) { job.ac.abort(); wait = { turn: job.turn, ms: Date.now() - job.at, gaveUp: true } }
         else if (ms > 200) wait = { turn: job.turn, ms }
       } else if (job) job.ac.abort()
@@ -380,9 +396,13 @@ export function apply(ctx) {
 
   ctx.tavern.onTurnSettled(t => startExtract(t.gameId, t).catch(e => recordError(t.gameId, '后台记账', e)))
 
-  ctx.tavern.onTimelineChanged(({ gameId }) => {
+  // 旧版 Tavern 没有 versionSignal：剧情线变了就停掉受影响的后台记账。
+  // 重新生成、编辑的是更后面的一轮时，前一轮的记账不受影响，不停。
+  if (typeof ctx.tavern.versionSignal !== 'function') ctx.tavern.onTimelineChanged(({ gameId, kind, turn }) => {
     const r = jobs.get(gameId)
-    if (r) r.ac.abort()
+    if (!r) return
+    if ((kind === 'regenerate' || kind === 'edit') && Number.isSafeInteger(turn) && turn > r.turn) return
+    r.ac.abort()
   })
 
   const latestOf = async gameId => {

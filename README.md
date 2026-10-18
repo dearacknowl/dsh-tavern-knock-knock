@@ -101,7 +101,7 @@
 
 ## 快速开始
 
-**目标环境**：DSH Tavern 2.6 或更新，需提供插件接口第 2 版。作者此前主要在 2.6 环境使用；本次发布整理未重新验证各宿主版本，更新版本的兼容性以实际运行结果为准。
+**目标环境**：DSH Tavern 2.6 或更新（插件接口第 2 版起），已适配 3.0。0.7.1 用 3.0 和 2.7 的插件接口代码跑过完整流程；实机游玩主要在 2.6 上，3.0 上的实际效果欢迎反馈。
 
 1. **[下载最新版](https://github.com/dearacknowl/dsh-tavern-knock-knock/releases/latest)**，解压后把整个 `dsh-tavern-knock-knock` 文件夹放进 Tavern 数据目录下的 `plugins` 文件夹。桌面版通常是 `…\profile-data\tavern\data\plugins\`，放好后应有 `…\plugins\dsh-tavern-knock-knock\package.json`。
 2. **完全重启 DSH**：托盘图标右键 →「退出」，确认任务管理器里没有残留进程，再重新打开。只关窗口或刷新页面不够。
@@ -135,5 +135,5 @@
 
 ## 本次发布核验范围
 
-本次仅核对发布文件、文档引用及安装包一致性，未重新进行宿主实机验收；预览图为示例数据渲染，不代表新增运行测试。
+0.7.1 用 DSH Tavern 3.0 和 2.7 的插件接口代码（`tavern-plugin/lib/plugin-api.js`）模拟一局，跑过记账、到期提醒、重新生成、导出；尚未在 3.0 桌面版上实机游玩。预览图为示例数据渲染。
 
